@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PDV Seguro - Victorino.eng</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dourado: '#D4AF37',
+            douradoEscuro: '#B8941F',
+            preto: '#1a1a1a',
+            cinzaEscuro: '#2d2d2d',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    .sidebar-scroll { max-height: calc(100vh - 96px); overflow:auto; }
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #D4AF37, #B8941F); border-radius:999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @media print {
+        body > div:not(#relatorio-print-area) { display: none !important; }
+        #root { width: 100%; display: block !important; }
+        #relatorio-print-area { display: block !important; width: 100%; margin: 0; padding: 0; box-shadow: none; }
+        #relatorio-print-area h2 { margin-top: 0; padding-top: 0; }
+        .no-print { display: none !important; }
+        .print-table { width: 100%; font-size: 10px; }
+        .print-table th, .print-table td { padding: 4px; border-bottom: 1px solid #ddd; }
+        .break-page { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+  const { useState, useEffect, useMemo, useRef } = React;
+
+  // --- CONFIGURAÇÃO SUPABASE ---
+  // COPIE DO PAINEL DO SUPABASE (PROJECT SETTINGS -> API)
+  const SUPABASE_URL = 'SUA_URL_DO_SUPABASE_AQUI'; 
+  const SUPABASE_KEY = 'SUA_CHAVE_ANON_PUBLICA_AQUI';
+  
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /**********************
+    * Utilitários *
+    **********************/
+  function uid(){ return Date.now() + Math.floor(Math.random()*9999); }
+  function currency(v){ return 'R$ ' + Number(v||0).toFixed(2).replace('.', ','); }
+
+  // Fallback para não quebrar se falhar internet, mas a verdade vem do banco
+  function getLocal(key, fallback){
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : fallback;
+  }
+  function setLocal(key, value){
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  /**********
+    * Login Seguro *
+    **********/
+  function Login({ onLogin }){
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
+
+    async function handleLogin(e){
+      e.preventDefault();
+      setLoading(true);
+      setErr('');
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        setErr('Erro: ' + error.message);
+        setLoading(false);
+      } else {
+        // Login sucesso, o App vai detectar a sessão
+      }
+    }
+
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-cinzaEscuro via-preto to-cinzaEscuro">
+        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          
+          <div className="hidden md:flex flex-col items-center justify-center rounded-2xl p-8 bg-cinzaEscuro shadow-xl border-2 border-dourado">
+            <div className="mb-6">
+                <img src="img/victorino.png" alt="Victorino.eng" className="w-48 h-48 object-contain rounded-full border-4 border-dourado shadow-[0_0_30px_rgba(212,175,55,0.5)] bg-preto"/>
+            </div>
+            <h1 className="text-3xl font-extrabold text-dourado">Gestão Segura</h1>
+            <p className="mt-2 text-gray-300">Acesso Restrito</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="bg-cinzaEscuro border-2 border-dourado rounded-2xl p-6 shadow-lg">
+            <h2 className="text-2xl font-bold text-dourado mb-6">Acesso ao Sistema</h2>
+            <p className="text-gray-400 text-sm mb-4">Entre com seu e-mail e senha.</p>
+            <label className="block mb-4">
+              <span className="text-sm text-gray-300">E-mail</span>
+              <input type="email" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-dourado transition" 
+                     value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@loja.com" required />
+            </label>
+            <label className="block mb-4">
+              <span className="text-sm text-gray-300">Senha</span>
+              <input type="password" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-dourado transition" 
+                     value={password} onChange={e=>setPassword(e.target.value)} placeholder="******" required />
+            </label>
+            {err && <div className="text-red-400 mb-3 text-sm font-bold bg-red-900/30 p-2 rounded border border-red-800">{err}</div>}
+            <button disabled={loading} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-dourado to-douradoEscuro text-preto hover:shadow-lg transition disabled:opacity-50">
+                {loading ? 'Verificando...' : 'Entrar'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  /****************
+    * Header, Side *
+    ****************/
+  function Header({user, onLogout, caixaAberto}){
+    return (
+      <header className="bg-white shadow sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <img src="img/victorino.png" alt="Logo" className="w-12 h-12 rounded-full border border-dourado bg-preto object-contain shadow-sm" />
+            <div>
+              <div className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Victorino.eng</div>
+              <div className="text-xs text-gray-500 hidden sm:block">
+                Operador: <span className="font-bold text-black uppercase">{user?.username}</span> 
+                {user?.role === 'admin' && <span className="ml-2 bg-black text-dourado px-2 rounded text-[10px] font-bold">ADMIN</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {caixaAberto ? (
+                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200 animate-pulse flex flex-col items-end">
+                    <span>CAIXA ABERTO</span>
+                    <span className="text-[10px] text-green-800">Responsável: {caixaAberto.usuario}</span>
+                </div>
+            ) : (
+                <div className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200">
+                    CAIXA FECHADO
+                </div>
+            )}
+            <button onClick={onLogout} className="px-3 py-1 rounded-lg border hover:bg-red-50 hover:text-red-600 transition text-sm font-bold">Sair</button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  function Sidebar({selected, setSelected, user}){
+    const itens = [
+      { key:'caixa', label:'💰 Fluxo de Caixa', roles: ['admin', 'funcionario'] },
+      { key:'pdv', label:'🛒 PDV (Venda)', roles: ['admin', 'funcionario'] },
+      { key:'fiado', label:'📒 Caderno de Fiado', roles: ['admin', 'funcionario'] },
+      { key:'comandas', label:'💳 Comandas / Mesas', roles: ['admin', 'funcionario'] },
+      { key:'produtos', label:'📦 Estoque / Produtos', roles: ['admin', 'funcionario'] }, 
+      { key:'relatorios', label:'📊 Relatórios', roles: ['admin', 'funcionario'] },
+      { key:'avancado', label:'📈 Relatório Avançado', roles: ['admin'] }, 
+      { key:'usuarios', label:'👥 Usuários (Admin)', roles: ['admin'] },
+      { key:'config', label:'⚙️ Configurações', roles: ['admin'] } 
+    ];
+
+    const menuPermitido = itens.filter(i => i.roles.includes(user.role));
+
+    return (
+      <aside className="w-64 bg-white border-r hidden md:block">
+        <div className="p-4 sidebar-scroll">
+          {menuPermitido.map(i=>(
+            <button key={i.key} onClick={()=>setSelected(i.key)}
+              className={`flex items-center gap-3 w-full text-left px-3 py-3 rounded-xl my-1 font-medium transition ${selected===i.key ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' : 'hover:bg-indigo-50'}`}>
+              <span>{i.label}</span>
+            </button>
+          ))}
+        </div>
+      </aside>
+    );
+  }
+
+  /*********************
+    * COMPONENTE: USUARIOS (SUPABASE AUTH) *
+    *********************/
+  function UsuariosView({ salvarUsuarios, currentUser }) {
+      // Lista apenas os perfis cadastrados no public.profiles
+      const [listaPerfis, setListaPerfis] = useState([]);
+      const [novoEmail, setNovoEmail] = useState('');
+      const [novoPassword, setNovoPassword] = useState('');
+      const [novoNome, setNovoNome] = useState('');
+      const [novoRole, setNovoRole] = useState('funcionario');
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        carregarPerfis();
+      }, []);
+
+      async function carregarPerfis(){
+        const { data } = await supabase.from('profiles').select('*');
+        if(data) setListaPerfis(data);
+      }
+
+      async function cadastrar(e){
+          e.preventDefault();
+          if(!novoEmail || !novoPassword || !novoNome) return alert("Preencha todos os campos");
+          setLoading(true);
+
+          // 1. Criar usuário no Auth do Supabase
+          const { data, error } = await supabase.auth.signUp({
+            email: novoEmail,
+            password: novoPassword,
+          });
+
+          if(error) {
+            alert("Erro ao criar login: " + error.message);
+            setLoading(false);
+            return;
+          }
+
+          if(data.user) {
+             // 2. Criar perfil na tabela pública
+             const { error: profileError } = await supabase.from('profiles').insert({
+                 id: data.user.id,
+                 username: novoNome,
+                 role: novoRole
+             });
+
+             if(profileError) alert("Usuário criado, mas erro ao criar perfil: " + profileError.message);
+             else {
+                 alert("Usuário criado com sucesso!");
+                 setNovoEmail(''); setNovoPassword(''); setNovoNome('');
+                 carregarPerfis();
+             }
+          }
+          setLoading(false);
+      }
+
+      return (
+          <div className="space-y-6">
+              <h2 className="text-3xl font-extrabold text-gray-800 border-b pb-2">👥 Gestão de Acesso</h2>
+              
+              <div className="bg-white p-6 rounded-2xl shadow border-l-4 border-indigo-600">
+                  <h3 className="font-bold text-lg mb-4">Cadastrar Novo Usuário</h3>
+                  <form onSubmit={cadastrar} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                      <label className="block">
+                          <span className="text-sm text-gray-500">Nome (Exibição)</span>
+                          <input value={novoNome} onChange={e=>setNovoNome(e.target.value)} className="w-full p-2 border rounded" placeholder="Ex: Maria" required />
+                      </label>
+                      <label className="block">
+                          <span className="text-sm text-gray-500">E-mail de Login</span>
+                          <input type="email" value={novoEmail} onChange={e=>setNovoEmail(e.target.value)} className="w-full p-2 border rounded" placeholder="maria@loja.com" required />
+                      </label>
+                      <label className="block">
+                          <span className="text-sm text-gray-500">Senha</span>
+                          <input type="password" value={novoPassword} onChange={e=>setNovoPassword(e.target.value)} className="w-full p-2 border rounded" placeholder="******" required />
+                      </label>
+                      <label className="block">
+                          <span className="text-sm text-gray-500">Nível</span>
+                          <select value={novoRole} onChange={e=>setNovoRole(e.target.value)} className="w-full p-2 border rounded">
+                              <option value="funcionario">Funcionário</option>
+                              <option value="admin">Administrador</option>
+                          </select>
+                      </label>
+                      <button disabled={loading} className="py-2 px-4 bg-indigo-600 text-white rounded font-bold shadow hover:bg-indigo-700 disabled:opacity-50">
+                          {loading ? '...' : 'Cadastrar'}
+                      </button>
+                  </form>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow overflow-hidden">
+                  <table className="w-full text-sm">
+                      <thead className="bg-gray-100">
+                          <tr>
+                              <th className="p-3 text-left">Nome</th>
+                              <th className="p-3 text-left">Nível</th>
+                              <th className="p-3 text-left">ID Seguro</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {listaPerfis.map(u => (
+                              <tr key={u.id} className="border-b">
+                                  <td className="p-3 font-bold">{u.username} {u.id === currentUser.id && '(Você)'}</td>
+                                  <td className="p-3">
+                                      {u.role === 'admin' 
+                                          ? <span className="bg-black text-dourado px-2 py-1 rounded text-xs font-bold">ADMIN</span>
+                                          : <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs">Vendedor</span>}
+                                  </td>
+                                  <td className="p-3 text-gray-400 font-mono text-xs">{u.id}</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      );
+  }
+
+  // --- COMPONENTES PADRÃO (SIMPLIFICADOS PARA SUPABASE) ---
+  function CaixaView({ caixaAberto, abrirCaixa, fecharCaixa, vendasDoTurno, user }) {
+    const [valorInicial, setValorInicial] = useState('');
+    const [valorFinal, setValorFinal] = useState('');
+
+    const vendasDinheiro = vendasDoTurno.filter(v => v.tipo_pagamento !== 'Fiado');
+    const vendasFiado = vendasDoTurno.filter(v => v.tipo_pagamento === 'Fiado');
+
+    const totalDinheiroVendido = vendasDinheiro.reduce((acc, v) => acc + (v.total||0), 0);
+    const totalFiadoVendido = vendasFiado.reduce((acc, v) => acc + (v.total||0), 0);
+    const saldoEsperado = caixaAberto ? (caixaAberto.saldo_inicial + totalDinheiroVendido) : 0;
+
+    function handleAbrir(e) {
+        e.preventDefault();
+        abrirCaixa(parseFloat(valorInicial));
+    }
+
+    function handleFechar(e) {
+        e.preventDefault();
+        if(!confirm(`Confirma o fechamento?`)) return;
+        fecharCaixa(parseFloat(valorFinal || 0), totalDinheiroVendido);
+    }
+
+    if (!caixaAberto) {
+        return (
+            <div className="max-w-xl mx-auto mt-10 p-8 bg-white rounded-2xl shadow-xl border-t-4 border-red-500">
+                <div className="text-center mb-6">
+                    <div className="text-5xl mb-2">🔒</div>
+                    <h2 className="text-2xl font-bold text-gray-800">Caixa Fechado</h2>
+                    <p className="text-gray-500">Olá <b>{user.username}</b>.</p>
+                </div>
+                <form onSubmit={handleAbrir} className="bg-gray-50 p-6 rounded-xl border">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Fundo de Troco</label>
+                    <input type="number" step="0.01" className="w-full p-3 border rounded-xl text-lg mb-4" 
+                        value={valorInicial} onChange={e=>setValorInicial(e.target.value)} placeholder="0.00" autoFocus />
+                    <button className="w-full py-3 bg-green-600 text-white font-bold rounded-xl shadow">ABRIR CAIXA</button>
+                </form>
+            </div>
+        );
+    }
+
+    if (caixaAberto.usuario !== user.username) return <div className="p-8 bg-yellow-100 rounded">Caixa aberto por {caixaAberto.usuario}.</div>;
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-3xl font-extrabold text-gray-800 border-b pb-2">💰 Fluxo de Caixa</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-2xl shadow border-l-4 border-blue-500">
+                    <div className="text-gray-500 text-xs font-bold">INICIAL</div>
+                    <div className="text-xl font-bold">{currency(caixaAberto.saldo_inicial)}</div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow border-l-4 border-purple-500">
+                    <div className="text-gray-500 text-xs font-bold">GAVETA (ESPERADO)</div>
+                    <div className="text-2xl font-bold text-purple-700">{currency(saldoEsperado)}</div>
+                </div>
+            </div>
+            <div className="bg-white p-8 rounded-2xl shadow mt-6 border border-red-100">
+                <h3 className="font-bold text-xl text-red-600 mb-4">Fechar Turno</h3>
+                <form onSubmit={handleFechar} className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Contagem Final</label>
+                        <input type="number" step="0.01" className="w-full p-3 border rounded-xl text-lg" 
+                            value={valorFinal} onChange={e=>setValorFinal(e.target.value)} required />
+                    </div>
+                    <button className="py-3 px-8 bg-red-600 text-white font-bold rounded-xl">ENCERRAR</button>
+                </form>
+            </div>
+        </div>
+    );
+  }
+
+  function PDVView({produtos, adicionarAoCarrinho, busca, setBusca, carrinho, alterarQuantidade, removerDoCarrinho, finalizarVenda, totalCarrinho, abrirComanda, caixaAberto}){
+    const produtosFiltrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
+
+    return (
+      <div className="space-y-4">
+        {!caixaAberto && <div className="bg-red-100 text-red-700 px-4 py-3 rounded">Caixa Fechado!</div>}
+        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Pesquisar..." className="w-full p-3 border rounded-xl" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {produtosFiltrados.map(p => (
+                <div key={p.id} onClick={()=>adicionarAoCarrinho(p)} className="p-4 bg-white rounded-2xl border cursor-pointer hover:shadow-lg">
+                  <div className="font-bold">{p.nome}</div>
+                  <div className="text-green-600 font-bold">{currency(p.preco)}</div>
+                  <div className="text-xs text-gray-500">Estoque: {p.estoque}</div>
+                </div>
+              ))}
+          </div>
+          <div className="bg-white p-4 rounded-2xl shadow h-full flex flex-col">
+            <h3 className="font-bold mb-3">Carrinho</h3>
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-80">
+              {carrinho.map(item=>(
+                <div key={item.id} className="flex justify-between items-center border-b pb-2">
+                  <div>
+                    <div className="font-medium">{item.nome}</div>
+                    <div className="text-xs text-green-600">{item.quantidade}x {currency(item.preco)}</div>
+                  </div>
+                  <button onClick={()=>removerDoCarrinho(item.id)} className="text-red-500">X</button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 border-t pt-3">
+              <div className="flex justify-between font-bold text-lg mb-3"><span>Total</span><span>{currency(totalCarrinho)}</span></div>
+              <button onClick={finalizarVenda} disabled={!caixaAberto || carrinho.length===0} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold disabled:opacity-50">Finalizar (Dinheiro)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function ProdutosView({produtos, salvarProduto, user}){
+    const [form, setForm] = useState({ nome:'', preco:'', estoque:'' });
+    function submit(e){
+      e.preventDefault();
+      salvarProduto({...form});
+      setForm({nome:'', preco:'', estoque:''});
+    }
+    if(user.role !== 'admin') return <div className="p-4">Acesso negado.</div>;
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white p-4 rounded shadow">
+          <form onSubmit={submit} className="space-y-3">
+            <input value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})} placeholder="Nome" className="w-full p-2 border rounded" required />
+            <input value={form.preco} onChange={e=>setForm({...form, preco:e.target.value})} placeholder="Preço" className="w-full p-2 border rounded" required />
+            <input value={form.estoque} onChange={e=>setForm({...form, estoque:e.target.value})} placeholder="Estoque" className="w-full p-2 border rounded" required />
+            <button className="w-full py-2 bg-indigo-600 text-white rounded">Salvar</button>
+          </form>
+        </div>
+        <div className="lg:col-span-2 bg-white p-4 rounded shadow">
+          <table className="w-full text-sm">
+            <thead><tr><th className="text-left">Nome</th><th className="text-right">Preço</th><th className="text-right">Estoque</th></tr></thead>
+            <tbody>
+              {produtos.map(p=>(
+                <tr key={p.id} className="border-b"><td className="p-2">{p.nome}</td><td className="p-2 text-right">{currency(p.preco)}</td><td className="p-2 text-right">{p.estoque}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  function ConfigView({ settings, salvarSettings, user }) {
+    const [formData, setFormData] = useState({
+      mpAccessToken: settings?.mpAccessToken || '',
+      mpDeviceId: settings?.mpDeviceId || '', 
+    });
+    function salvar(e) {
+      e.preventDefault();
+      salvarSettings(formData);
+    }
+    return (
+      <div className="bg-white p-6 rounded-2xl shadow">
+        <h2 className="text-xl font-bold mb-4">⚙️ Configurações</h2>
+        <div className="space-y-3">
+          <label className="block"><span className="text-xs font-bold">Mercado Pago Token</span>
+            <input type="password" value={formData.mpAccessToken} onChange={e=>setFormData({...formData, mpAccessToken:e.target.value})} className="w-full p-2 border rounded" />
+          </label>
+          <button onClick={salvar} className="px-4 py-2 bg-indigo-600 text-white rounded">Salvar</button>
+        </div>
+      </div>
+    );
+  }
+
+  /****************
+    * Main App *
+    ****************/
+  function App(){
+    const [session, setSession] = useState(null);
+    const [userProfile, setUserProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    
+    // Dados DB
+    const [produtos, setProdutos] = useState([]);
+    const [vendas, setVendas] = useState([]);
+    const [caixas, setCaixas] = useState([]);
+    const [settings, setSettings] = useState({});
+    
+    const [carrinho, setCarrinho] = useState([]);
+    const [busca, setBusca] = useState('');
+    const [selected, setSelected] = useState('pdv');
+
+    // 1. Monitorar Sessão do Supabase
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            if(session) fetchProfile(session.user.id);
+            else setLoading(false);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+            if(session) fetchProfile(session.user.id);
+            else { setUserProfile(null); setLoading(false); }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // 2. Buscar Perfil e Dados quando logado
+    async function fetchProfile(uid){
+        const { data } = await supabase.from('profiles').select('*').eq('id', uid).single();
+        if(data) {
+            setUserProfile(data);
+            loadData();
+        }
+        setLoading(false);
+    }
+
+    async function loadData(){
+        const p = await supabase.from('produtos').select('*');
+        if(p.data) setProdutos(p.data);
+
+        const v = await supabase.from('vendas').select('*');
+        if(v.data) setVendas(v.data);
+
+        const c = await supabase.from('caixas').select('*');
+        if(c.data) setCaixas(c.data);
+        
+        const s = await supabase.from('config').select('*').single();
+        if(s.data) setSettings(s.data.settings || {});
+    }
+
+    // --- Ações no Banco ---
+    async function salvarProduto(prod){
+        const { error } = await supabase.from('produtos').insert([{...prod, preco: parseFloat(prod.preco), estoque: parseFloat(prod.estoque)}]);
+        if(!error) loadData();
+    }
+
+    async function abrirCaixa(valor){
+        const novo = { usuario: userProfile.username, data_abertura: new Date().toISOString(), saldo_inicial: valor, status: 'Aberto' };
+        await supabase.from('caixas').insert([novo]);
+        loadData();
+        setSelected('pdv');
+    }
+
+    async function fecharCaixa(final, vendasTotal){
+        if(!caixaAberto) return;
+        await supabase.from('caixas').update({ 
+            status:'Fechado', 
+            saldo_final_declarado: final,
+            data_fechamento: new Date().toISOString(),
+            diferenca: final - (caixaAberto.saldo_inicial + vendasTotal)
+        }).eq('id', caixaAberto.id);
+        loadData();
+        setSelected('caixa');
+    }
+
+    async function finalizarVenda(){
+        const total = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
+        const venda = { 
+            data: new Date().toISOString(), total, itens: carrinho, 
+            tipo_pagamento: 'Dinheiro', origem: 'PDV', vendedor: userProfile.username, caixa_id: caixaAberto.id 
+        };
+        await supabase.from('vendas').insert([venda]);
+        
+        // Atualizar Estoque (Loop simples, ideal seria RPC)
+        for (const item of carrinho) {
+             const prod = produtos.find(p=>p.id===item.id);
+             if(prod) await supabase.from('produtos').update({estoque: prod.estoque - item.quantidade}).eq('id', item.id);
+        }
+
+        setCarrinho([]);
+        alert('Venda ok');
+        loadData();
+    }
+    
+    async function salvarSettings(dados){
+        // Verifica se já existe config
+        const { data } = await supabase.from('config').select('id').limit(1);
+        if(data && data.length > 0) {
+             await supabase.from('config').update({ settings: dados }).eq('id', data[0].id);
+        } else {
+             await supabase.from('config').insert([{ settings: dados }]);
+        }
+        alert('Salvo!');
+        loadData();
+    }
+
+    const caixaAberto = useMemo(() => caixas.find(c => c.usuario === userProfile?.username && c.status === 'Aberto'), [caixas, userProfile]);
+    const vendasTurno = useMemo(() => {
+        if(!caixaAberto) return [];
+        return vendas.filter(v => v.caixa_id === caixaAberto.id);
+    }, [vendas, caixaAberto]);
+    const totalCarrinho = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
+
+    if(loading) return <div className="min-h-screen flex items-center justify-center text-white bg-cinzaEscuro">Carregando Sistema Seguro...</div>;
+    
+    if(!session || !userProfile) return <Login />;
+
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50">
+        <Header user={userProfile} onLogout={()=>supabase.auth.signOut()} caixaAberto={caixaAberto} />
+        <div className="max-w-7xl mx-auto flex flex-1 w-full overflow-hidden">
+          <Sidebar selected={selected} setSelected={setSelected} user={userProfile} />
+          <main className="flex-1 p-6 overflow-y-auto">
+            
+            {selected === 'pdv' && (
+              <PDVView produtos={produtos} adicionarAoCarrinho={p=>setCarrinho([...carrinho, {...p, quantidade:1}])} 
+                    busca={busca} setBusca={setBusca} carrinho={carrinho} 
+                    removerDoCarrinho={id=>setCarrinho(carrinho.filter(i=>i.id!==id))}
+                    finalizarVenda={finalizarVenda} totalCarrinho={totalCarrinho} caixaAberto={caixaAberto} />
+            )}
+
+            {selected === 'caixa' && <CaixaView caixaAberto={caixaAberto} abrirCaixa={abrirCaixa} fecharCaixa={fecharCaixa} vendasDoTurno={vendasTurno} user={userProfile} />}
+            
+            {selected === 'produtos' && <ProdutosView produtos={produtos} salvarProduto={salvarProduto} user={userProfile} />}
+            
+            {selected === 'usuarios' && userProfile.role === 'admin' && <UsuariosView salvarUsuarios={()=>{}} currentUser={userProfile} />}
+
+            {selected === 'config' && userProfile.role === 'admin' && <ConfigView settings={settings} salvarSettings={salvarSettings} user={userProfile} />}
+
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
