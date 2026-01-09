@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PDV Seguro - Victorino.eng</title>
+  <title>PDV Integrado - Victorino.eng</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -53,13 +53,29 @@
   <script type="text/babel">
   const { useState, useEffect, useMemo, useRef } = React;
 
-  // --- CONFIGURAÇÃO SUPABASE ---
-  // COPIE DO PAINEL DO SUPABASE (PROJECT SETTINGS -> API)
+  // =================================================================================
+  // ⚠️⚠️ ÁREA DE CONFIGURAÇÃO OBRIGATÓRIA ⚠️⚠️
+  // Substitua os textos abaixo pelas chaves do seu projeto Supabase (Project Settings > API)
+  
   const SUPABASE_URL = 'https://gukmtlftfjkzzrqywnxh.supabase.co'; 
   const SUPABASE_KEY = 'sb_publishable_Pmc_z08sgfk6j-MRB2W5xw_jnEE-vpL';
-  
-  // CORREÇÃO: Usamos 'db' para não conflitar com a biblioteca 'supabase' global
-  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // =================================================================================
+
+  // Verificação de Segurança para não travar a tela
+  let db = null;
+  let configError = false;
+
+  if(SUPABASE_URL.includes('SUA_URL') || SUPABASE_KEY.includes('SUA_CHAVE')){
+      configError = true;
+  } else {
+      try {
+        db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      } catch(e) {
+        configError = true;
+        console.error("Erro ao iniciar Supabase:", e);
+      }
+  }
 
   /**********************
     * Utilitários *
@@ -67,13 +83,25 @@
   function uid(){ return Date.now() + Math.floor(Math.random()*9999); }
   function currency(v){ return 'R$ ' + Number(v||0).toFixed(2).replace('.', ','); }
 
-  // Fallback para não quebrar se falhar internet
-  function getLocal(key, fallback){
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : fallback;
-  }
-  function setLocal(key, value){
-    localStorage.setItem(key, JSON.stringify(value));
+  /**********
+    * Tela de Erro de Configuração *
+    **********/
+  function ConfigErrorScreen() {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-red-50 p-6">
+              <div className="max-w-lg bg-white p-8 rounded-xl shadow-xl border-l-8 border-red-600">
+                  <h1 className="text-2xl font-bold text-red-700 mb-4">⚠️ Configuração Necessária</h1>
+                  <p className="mb-4 text-gray-700">O sistema não conseguiu conectar ao banco de dados.</p>
+                  <p className="font-bold mb-2">Como resolver:</p>
+                  <ol className="list-decimal ml-5 space-y-2 text-sm text-gray-600">
+                      <li>Abra este arquivo <b>index.html</b> no bloco de notas.</li>
+                      <li>Procure as linhas <b>50 e 51</b>.</li>
+                      <li>Coloque a <b>URL</b> e a <b>KEY</b> do seu painel Supabase.</li>
+                      <li>Salve e atualize a página.</li>
+                  </ol>
+              </div>
+          </div>
+      )
   }
 
   /**********
@@ -90,83 +118,66 @@
       setLoading(true);
       setErr('');
 
-      // CORREÇÃO: Usando 'db' ao invés de 'supabase'
-      const { data, error } = await db.auth.signInWithPassword({
-        email: email,
-        password: password,
-      });
+      try {
+          const { data, error } = await db.auth.signInWithPassword({
+            email: email,
+            password: password,
+          });
 
-      if (error) {
-        setErr('Erro: ' + error.message);
-        setLoading(false);
-      } else {
-        // Login sucesso
+          if (error) {
+            setErr('Acesso Negado: ' + error.message);
+            setLoading(false);
+          }
+      } catch (e) {
+          setErr("Erro de conexão.");
+          setLoading(false);
       }
     }
 
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-cinzaEscuro via-preto to-cinzaEscuro">
-        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-          
-          <div className="hidden md:flex flex-col items-center justify-center rounded-2xl p-8 bg-cinzaEscuro shadow-xl border-2 border-dourado">
-            <div className="mb-6">
-                <img src="img/victorino.png" alt="Victorino.eng" className="w-48 h-48 object-contain rounded-full border-4 border-dourado shadow-[0_0_30px_rgba(212,175,55,0.5)] bg-preto"/>
+        <div className="max-w-md w-full bg-cinzaEscuro border-2 border-dourado rounded-2xl p-6 shadow-lg">
+            <div className="text-center mb-6">
+                <img src="img/victorino.png" onError={(e)=>e.target.style.display='none'} className="w-24 h-24 mx-auto mb-4 object-contain rounded-full border-2 border-dourado bg-preto"/>
+                <h1 className="text-3xl font-extrabold text-dourado">PDV Seguro</h1>
             </div>
-            <h1 className="text-3xl font-extrabold text-dourado">Gestão Segura</h1>
-            <p className="mt-2 text-gray-300">Acesso Restrito</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="bg-cinzaEscuro border-2 border-dourado rounded-2xl p-6 shadow-lg">
-            <h2 className="text-2xl font-bold text-dourado mb-6">Acesso ao Sistema</h2>
-            <p className="text-gray-400 text-sm mb-4">Entre com seu e-mail e senha.</p>
-            <label className="block mb-4">
-              <span className="text-sm text-gray-300">E-mail</span>
-              <input type="email" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-dourado transition" 
-                     value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@loja.com" required />
-            </label>
-            <label className="block mb-4">
-              <span className="text-sm text-gray-300">Senha</span>
-              <input type="password" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-dourado transition" 
-                     value={password} onChange={e=>setPassword(e.target.value)} placeholder="******" required />
-            </label>
-            {err && <div className="text-red-400 mb-3 text-sm font-bold bg-red-900/30 p-2 rounded border border-red-800">{err}</div>}
-            <button disabled={loading} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-dourado to-douradoEscuro text-preto hover:shadow-lg transition disabled:opacity-50">
-                {loading ? 'Verificando...' : 'Entrar'}
-            </button>
-          </form>
+            <form onSubmit={handleLogin}>
+                <label className="block mb-4">
+                <span className="text-sm text-gray-300">E-mail</span>
+                <input type="email" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl" 
+                        value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@loja.com" required />
+                </label>
+                <label className="block mb-4">
+                <span className="text-sm text-gray-300">Senha</span>
+                <input type="password" className="mt-1 block w-full p-3 border border-dourado bg-preto text-white rounded-xl" 
+                        value={password} onChange={e=>setPassword(e.target.value)} placeholder="******" required />
+                </label>
+                {err && <div className="text-red-400 mb-3 text-sm font-bold bg-red-900/30 p-2 rounded border border-red-800">{err}</div>}
+                <button disabled={loading} className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-dourado to-douradoEscuro text-preto hover:shadow-lg transition disabled:opacity-50">
+                    {loading ? 'Conectando...' : 'Entrar'}
+                </button>
+            </form>
         </div>
       </div>
     );
   }
 
-  /****************
-    * Header, Side *
-    ****************/
+  // --- Header e Sidebar ---
   function Header({user, onLogout, caixaAberto}){
     return (
       <header className="bg-white shadow sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src="img/victorino.png" alt="Logo" className="w-12 h-12 rounded-full border border-dourado bg-preto object-contain shadow-sm" />
-            <div>
-              <div className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Victorino.eng</div>
-              <div className="text-xs text-gray-500 hidden sm:block">
-                Operador: <span className="font-bold text-black uppercase">{user?.username}</span> 
-                {user?.role === 'admin' && <span className="ml-2 bg-black text-dourado px-2 rounded text-[10px] font-bold">ADMIN</span>}
-              </div>
+            <div className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Victorino.eng</div>
+            <div className="text-xs text-gray-500 hidden sm:block">
+               Op: <span className="font-bold text-black uppercase">{user?.username}</span> 
             </div>
           </div>
-
           <div className="flex items-center gap-4">
             {caixaAberto ? (
-                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200 animate-pulse flex flex-col items-end">
-                    <span>CAIXA ABERTO</span>
-                    <span className="text-[10px] text-green-800">Responsável: {caixaAberto.usuario}</span>
-                </div>
+                <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200 animate-pulse">CAIXA ABERTO</div>
             ) : (
-                <div className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200">
-                    CAIXA FECHADO
-                </div>
+                <div className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200">FECHADO</div>
             )}
             <button onClick={onLogout} className="px-3 py-1 rounded-lg border hover:bg-red-50 hover:text-red-600 transition text-sm font-bold">Sair</button>
           </div>
@@ -187,9 +198,7 @@
       { key:'usuarios', label:'👥 Usuários (Admin)', roles: ['admin'] },
       { key:'config', label:'⚙️ Configurações', roles: ['admin'] } 
     ];
-
     const menuPermitido = itens.filter(i => i.roles.includes(user.role));
-
     return (
       <aside className="w-64 bg-white border-r hidden md:block">
         <div className="p-4 sidebar-scroll">
@@ -204,10 +213,9 @@
     );
   }
 
-  /*********************
-    * COMPONENTE: USUARIOS (SUPABASE AUTH) *
-    *********************/
-  function UsuariosView({ salvarUsuarios, currentUser }) {
+  // --- Views ---
+
+  function UsuariosView({ currentUser }) {
       const [listaPerfis, setListaPerfis] = useState([]);
       const [novoEmail, setNovoEmail] = useState('');
       const [novoPassword, setNovoPassword] = useState('');
@@ -215,12 +223,9 @@
       const [novoRole, setNovoRole] = useState('funcionario');
       const [loading, setLoading] = useState(false);
 
-      useEffect(() => {
-        carregarPerfis();
-      }, []);
+      useEffect(() => { carregarPerfis(); }, []);
 
       async function carregarPerfis(){
-        // CORREÇÃO: 'db'
         const { data } = await db.from('profiles').select('*');
         if(data) setListaPerfis(data);
       }
@@ -230,31 +235,15 @@
           if(!novoEmail || !novoPassword || !novoNome) return alert("Preencha todos os campos");
           setLoading(true);
 
-          // CORREÇÃO: 'db'
-          const { data, error } = await db.auth.signUp({
-            email: novoEmail,
-            password: novoPassword,
-          });
-
-          if(error) {
-            alert("Erro ao criar login: " + error.message);
-            setLoading(false);
-            return;
-          }
+          const { data, error } = await db.auth.signUp({ email: novoEmail, password: novoPassword });
+          if(error) { alert("Erro: " + error.message); setLoading(false); return; }
 
           if(data.user) {
              const { error: profileError } = await db.from('profiles').insert({
-                 id: data.user.id,
-                 username: novoNome,
-                 role: novoRole
+                 id: data.user.id, username: novoNome, role: novoRole
              });
-
-             if(profileError) alert("Usuário criado, mas erro ao criar perfil: " + profileError.message);
-             else {
-                 alert("Usuário criado com sucesso!");
-                 setNovoEmail(''); setNovoPassword(''); setNovoNome('');
-                 carregarPerfis();
-             }
+             if(profileError) alert("Erro perfil: " + profileError.message);
+             else { alert("Sucesso!"); setNovoEmail(''); setNovoPassword(''); setNovoNome(''); carregarPerfis(); }
           }
           setLoading(false);
       }
@@ -262,168 +251,106 @@
       return (
           <div className="space-y-6">
               <h2 className="text-3xl font-extrabold text-gray-800 border-b pb-2">👥 Gestão de Acesso</h2>
-              
               <div className="bg-white p-6 rounded-2xl shadow border-l-4 border-indigo-600">
-                  <h3 className="font-bold text-lg mb-4">Cadastrar Novo Usuário</h3>
+                  <h3 className="font-bold text-lg mb-4">Novo Usuário</h3>
                   <form onSubmit={cadastrar} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                      <label className="block">
-                          <span className="text-sm text-gray-500">Nome (Exibição)</span>
-                          <input value={novoNome} onChange={e=>setNovoNome(e.target.value)} className="w-full p-2 border rounded" placeholder="Ex: Maria" required />
-                      </label>
-                      <label className="block">
-                          <span className="text-sm text-gray-500">E-mail de Login</span>
-                          <input type="email" value={novoEmail} onChange={e=>setNovoEmail(e.target.value)} className="w-full p-2 border rounded" placeholder="maria@loja.com" required />
-                      </label>
-                      <label className="block">
-                          <span className="text-sm text-gray-500">Senha</span>
-                          <input type="password" value={novoPassword} onChange={e=>setNovoPassword(e.target.value)} className="w-full p-2 border rounded" placeholder="******" required />
-                      </label>
-                      <label className="block">
-                          <span className="text-sm text-gray-500">Nível</span>
-                          <select value={novoRole} onChange={e=>setNovoRole(e.target.value)} className="w-full p-2 border rounded">
-                              <option value="funcionario">Funcionário</option>
-                              <option value="admin">Administrador</option>
-                          </select>
-                      </label>
-                      <button disabled={loading} className="py-2 px-4 bg-indigo-600 text-white rounded font-bold shadow hover:bg-indigo-700 disabled:opacity-50">
-                          {loading ? '...' : 'Cadastrar'}
-                      </button>
+                      <label className="block"><span className="text-sm">Nome</span><input value={novoNome} onChange={e=>setNovoNome(e.target.value)} className="w-full p-2 border rounded" required /></label>
+                      <label className="block"><span className="text-sm">E-mail</span><input type="email" value={novoEmail} onChange={e=>setNovoEmail(e.target.value)} className="w-full p-2 border rounded" required /></label>
+                      <label className="block"><span className="text-sm">Senha</span><input type="password" value={novoPassword} onChange={e=>setNovoPassword(e.target.value)} className="w-full p-2 border rounded" required /></label>
+                      <label className="block"><span className="text-sm">Nível</span><select value={novoRole} onChange={e=>setNovoRole(e.target.value)} className="w-full p-2 border rounded"><option value="funcionario">Funcionário</option><option value="admin">Admin</option></select></label>
+                      <button disabled={loading} className="py-2 px-4 bg-indigo-600 text-white rounded font-bold shadow disabled:opacity-50">{loading ? '...' : 'Cadastrar'}</button>
                   </form>
               </div>
-
               <div className="bg-white rounded-2xl shadow overflow-hidden">
-                  <table className="w-full text-sm">
-                      <thead className="bg-gray-100">
-                          <tr>
-                              <th className="p-3 text-left">Nome</th>
-                              <th className="p-3 text-left">Nível</th>
-                              <th className="p-3 text-left">ID Seguro</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {listaPerfis.map(u => (
-                              <tr key={u.id} className="border-b">
-                                  <td className="p-3 font-bold">{u.username} {u.id === currentUser.id && '(Você)'}</td>
-                                  <td className="p-3">
-                                      {u.role === 'admin' 
-                                          ? <span className="bg-black text-dourado px-2 py-1 rounded text-xs font-bold">ADMIN</span>
-                                          : <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs">Vendedor</span>}
-                                  </td>
-                                  <td className="p-3 text-gray-400 font-mono text-xs">{u.id}</td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+                  <table className="w-full text-sm"><thead className="bg-gray-100"><tr><th className="p-3">Nome</th><th className="p-3">Nível</th></tr></thead><tbody>
+                          {listaPerfis.map(u => (<tr key={u.id} className="border-b"><td className="p-3">{u.username}</td><td className="p-3">{u.role}</td></tr>))}
+                  </tbody></table>
               </div>
           </div>
       );
   }
 
-  // --- COMPONENTES PADRÃO ---
   function CaixaView({ caixaAberto, abrirCaixa, fecharCaixa, vendasDoTurno, user }) {
     const [valorInicial, setValorInicial] = useState('');
     const [valorFinal, setValorFinal] = useState('');
-
-    const vendasDinheiro = vendasDoTurno.filter(v => v.tipo_pagamento !== 'Fiado');
-    const vendasFiado = vendasDoTurno.filter(v => v.tipo_pagamento === 'Fiado');
-
-    const totalDinheiroVendido = vendasDinheiro.reduce((acc, v) => acc + (v.total||0), 0);
-    const totalFiadoVendido = vendasFiado.reduce((acc, v) => acc + (v.total||0), 0);
-    const saldoEsperado = caixaAberto ? (caixaAberto.saldo_inicial + totalDinheiroVendido) : 0;
-
-    function handleAbrir(e) {
-        e.preventDefault();
-        abrirCaixa(parseFloat(valorInicial));
-    }
-
-    function handleFechar(e) {
-        e.preventDefault();
-        if(!confirm(`Confirma o fechamento?`)) return;
-        fecharCaixa(parseFloat(valorFinal || 0), totalDinheiroVendido);
-    }
+    const totalVendido = vendasDoTurno.reduce((acc, v) => acc + (v.total||0), 0);
+    const saldoEsperado = caixaAberto ? (caixaAberto.saldo_inicial + totalVendido) : 0;
 
     if (!caixaAberto) {
         return (
-            <div className="max-w-xl mx-auto mt-10 p-8 bg-white rounded-2xl shadow-xl border-t-4 border-red-500">
-                <div className="text-center mb-6">
-                    <div className="text-5xl mb-2">🔒</div>
-                    <h2 className="text-2xl font-bold text-gray-800">Caixa Fechado</h2>
-                    <p className="text-gray-500">Olá <b>{user.username}</b>.</p>
-                </div>
-                <form onSubmit={handleAbrir} className="bg-gray-50 p-6 rounded-xl border">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Fundo de Troco</label>
-                    <input type="number" step="0.01" className="w-full p-3 border rounded-xl text-lg mb-4" 
-                        value={valorInicial} onChange={e=>setValorInicial(e.target.value)} placeholder="0.00" autoFocus />
-                    <button className="w-full py-3 bg-green-600 text-white font-bold rounded-xl shadow">ABRIR CAIXA</button>
-                </form>
+            <div className="max-w-xl mx-auto mt-10 p-8 bg-white rounded-2xl shadow-xl border-t-4 border-red-500 text-center">
+                <h2 className="text-2xl font-bold mb-4">Caixa Fechado</h2>
+                <input type="number" className="w-full p-3 border rounded-xl mb-4 text-center text-xl" value={valorInicial} onChange={e=>setValorInicial(e.target.value)} placeholder="Fundo de Troco (R$)" />
+                <button onClick={()=>abrirCaixa(parseFloat(valorInicial))} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">ABRIR CAIXA</button>
             </div>
         );
     }
-
-    if (caixaAberto.usuario !== user.username) return <div className="p-8 bg-yellow-100 rounded">Caixa aberto por {caixaAberto.usuario}.</div>;
+    if (caixaAberto.usuario !== user.username) return <div className="p-8 bg-yellow-100 rounded">Caixa aberto por outra pessoa.</div>;
 
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-extrabold text-gray-800 border-b pb-2">💰 Fluxo de Caixa</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white p-4 rounded-2xl shadow border-l-4 border-blue-500">
-                    <div className="text-gray-500 text-xs font-bold">INICIAL</div>
-                    <div className="text-xl font-bold">{currency(caixaAberto.saldo_inicial)}</div>
-                </div>
-                <div className="bg-white p-4 rounded-2xl shadow border-l-4 border-purple-500">
-                    <div className="text-gray-500 text-xs font-bold">GAVETA (ESPERADO)</div>
-                    <div className="text-2xl font-bold text-purple-700">{currency(saldoEsperado)}</div>
-                </div>
+            <h2 className="text-3xl font-extrabold border-b pb-2">💰 Caixa</h2>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded shadow"><div>INICIAL</div><div className="text-xl font-bold">{currency(caixaAberto.saldo_inicial)}</div></div>
+                <div className="bg-white p-4 rounded shadow"><div>TOTAL GAVETA</div><div className="text-xl font-bold text-purple-700">{currency(saldoEsperado)}</div></div>
             </div>
-            <div className="bg-white p-8 rounded-2xl shadow mt-6 border border-red-100">
-                <h3 className="font-bold text-xl text-red-600 mb-4">Fechar Turno</h3>
-                <form onSubmit={handleFechar} className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Contagem Final</label>
-                        <input type="number" step="0.01" className="w-full p-3 border rounded-xl text-lg" 
-                            value={valorFinal} onChange={e=>setValorFinal(e.target.value)} required />
-                    </div>
-                    <button className="py-3 px-8 bg-red-600 text-white font-bold rounded-xl">ENCERRAR</button>
-                </form>
+            <div className="bg-white p-6 rounded shadow border-red-100 mt-4">
+                <h3 className="font-bold text-red-600 mb-2">Fechar Turno</h3>
+                <div className="flex gap-2">
+                    <input type="number" className="flex-1 p-2 border rounded" value={valorFinal} onChange={e=>setValorFinal(e.target.value)} placeholder="Valor na Gaveta" />
+                    <button onClick={()=>fecharCaixa(parseFloat(valorFinal||0), totalVendido)} className="px-6 bg-red-600 text-white font-bold rounded">ENCERRAR</button>
+                </div>
             </div>
         </div>
     );
   }
 
-  function PDVView({produtos, adicionarAoCarrinho, busca, setBusca, carrinho, alterarQuantidade, removerDoCarrinho, finalizarVenda, totalCarrinho, abrirComanda, caixaAberto}){
-    const produtosFiltrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
-
+  function PDVView({produtos, adicionarAoCarrinho, busca, setBusca, carrinho, removerDoCarrinho, finalizarVenda, totalCarrinho, caixaAberto}){
+    const filtrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
+    
     return (
       <div className="space-y-4">
         {!caixaAberto && <div className="bg-red-100 text-red-700 px-4 py-3 rounded">Caixa Fechado!</div>}
         <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Pesquisar..." className="w-full p-3 border rounded-xl" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 grid grid-cols-2 lg:grid-cols-3 gap-4">
-              {produtosFiltrados.map(p => (
+              {filtrados.map(p => (
                 <div key={p.id} onClick={()=>adicionarAoCarrinho(p)} className="p-4 bg-white rounded-2xl border cursor-pointer hover:shadow-lg">
-                  <div className="font-bold">{p.nome}</div>
-                  <div className="text-green-600 font-bold">{currency(p.preco)}</div>
-                  <div className="text-xs text-gray-500">Estoque: {p.estoque}</div>
+                  <div className="font-bold">{p.nome}</div><div className="text-green-600 font-bold">{currency(p.preco)}</div>
+                  <div className="text-xs text-gray-400">Estoque: {p.estoque}</div>
                 </div>
               ))}
           </div>
-          <div className="bg-white p-4 rounded-2xl shadow h-full flex flex-col">
+          <div className="bg-white p-4 rounded-2xl shadow flex flex-col h-[500px]">
             <h3 className="font-bold mb-3">Carrinho</h3>
-            <div className="flex-1 space-y-2 overflow-y-auto max-h-80">
+            <div className="flex-1 overflow-y-auto space-y-2">
               {carrinho.map(item=>(
-                <div key={item.id} className="flex justify-between items-center border-b pb-2">
-                  <div>
-                    <div className="font-medium">{item.nome}</div>
-                    <div className="text-xs text-green-600">{item.quantidade}x {currency(item.preco)}</div>
-                  </div>
-                  <button onClick={()=>removerDoCarrinho(item.id)} className="text-red-500">X</button>
+                <div key={item.id} className="flex justify-between border-b pb-2">
+                  <div>{item.quantidade}x {item.nome}</div><button onClick={()=>removerDoCarrinho(item.id)} className="text-red-500">X</button>
                 </div>
               ))}
             </div>
+            
+            {/* BOTÕES DE PAGAMENTO COM INTEGRAÇÃO */}
             <div className="mt-4 border-t pt-3">
               <div className="flex justify-between font-bold text-lg mb-3"><span>Total</span><span>{currency(totalCarrinho)}</span></div>
-              <button onClick={finalizarVenda} disabled={!caixaAberto || carrinho.length===0} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold disabled:opacity-50">Finalizar (Dinheiro)</button>
+              
+              <div className="grid grid-cols-2 gap-2">
+                  <button onClick={()=>finalizarVenda('Dinheiro')} disabled={!caixaAberto || carrinho.length===0} 
+                      className="py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 disabled:opacity-50">
+                      💵 Dinheiro
+                  </button>
+                  <button onClick={()=>finalizarVenda('Debito')} disabled={!caixaAberto || carrinho.length===0} 
+                      className="py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50">
+                      💳 Débito
+                  </button>
+                  <button onClick={()=>finalizarVenda('Credito')} disabled={!caixaAberto || carrinho.length===0} 
+                      className="col-span-2 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50">
+                      💳 Crédito (Maquininha)
+                  </button>
+              </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -432,11 +359,7 @@
 
   function ProdutosView({produtos, salvarProduto, user}){
     const [form, setForm] = useState({ nome:'', preco:'', estoque:'' });
-    function submit(e){
-      e.preventDefault();
-      salvarProduto({...form});
-      setForm({nome:'', preco:'', estoque:''});
-    }
+    function submit(e){ e.preventDefault(); salvarProduto({...form}); setForm({nome:'', preco:'', estoque:''}); }
     if(user.role !== 'admin') return <div className="p-4">Acesso negado.</div>;
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -448,60 +371,34 @@
             <button className="w-full py-2 bg-indigo-600 text-white rounded">Salvar</button>
           </form>
         </div>
-        <div className="lg:col-span-2 bg-white p-4 rounded shadow">
-          <table className="w-full text-sm">
-            <thead><tr><th className="text-left">Nome</th><th className="text-right">Preço</th><th className="text-right">Estoque</th></tr></thead>
-            <tbody>
-              {produtos.map(p=>(
-                <tr key={p.id} className="border-b"><td className="p-2">{p.nome}</td><td className="p-2 text-right">{currency(p.preco)}</td><td className="p-2 text-right">{p.estoque}</td></tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="lg:col-span-2 bg-white p-4 rounded shadow max-h-[500px] overflow-auto">
+          <table className="w-full text-sm"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th></tr></thead><tbody>
+              {produtos.map(p=>(<tr key={p.id} className="border-b"><td className="p-2">{p.nome}</td><td className="p-2">{currency(p.preco)}</td><td className="p-2">{p.estoque}</td></tr>))}
+            </tbody></table>
         </div>
       </div>
     );
   }
 
   function ConfigView({ settings, salvarSettings, user }) {
-    const [formData, setFormData] = useState({
-      mpAccessToken: settings?.mpAccessToken || '',
-      mpDeviceId: settings?.mpDeviceId || '', 
-    });
-    function salvar(e) {
-      e.preventDefault();
-      salvarSettings(formData);
-    }
+    const [formData, setFormData] = useState({ mpAccessToken: settings?.mpAccessToken || '', mpDeviceId: settings?.mpDeviceId || '' });
     return (
       <div className="bg-white p-6 rounded-2xl shadow">
         <h2 className="text-xl font-bold mb-4">⚙️ Configurações</h2>
         <div className="space-y-3">
-          <label className="block"><span className="text-xs font-bold">Mercado Pago Token</span>
+          <label className="block"><span className="text-xs font-bold">Mercado Pago Token (Access Token)</span>
             <input type="password" value={formData.mpAccessToken} onChange={e=>setFormData({...formData, mpAccessToken:e.target.value})} className="w-full p-2 border rounded" />
           </label>
-          <button onClick={salvar} className="px-4 py-2 bg-indigo-600 text-white rounded">Salvar</button>
+          <label className="block"><span className="text-xs font-bold">Device ID (Ex: PAX-000...)</span>
+            <input type="text" value={formData.mpDeviceId} onChange={e=>setFormData({...formData, mpDeviceId:e.target.value})} className="w-full p-2 border rounded" />
+          </label>
+          <button onClick={()=>salvarSettings(formData)} className="px-4 py-2 bg-indigo-600 text-white rounded">Salvar</button>
         </div>
       </div>
     );
   }
-  
-  // Função Placeholder para Relatórios (para evitar erro de referência na Sidebar)
-  function RelatoriosView() {
-    return <div className="p-4 bg-white rounded shadow">Relatórios em construção...</div>
-  }
-  // Função Placeholder para Relatório Avançado
-  function RelatorioAvancado() {
-    return <div className="p-4 bg-white rounded shadow">Avançado em construção...</div>
-  }
 
-  // Comandas View (Simplificada para caber no código)
-  function ComandasView() {
-      return <div className="p-4 bg-white rounded shadow">Módulo Comandas Ativo.</div>
-  }
-  
-  function FiadoView() {
-      return <div className="p-4 bg-white rounded shadow">Módulo Fiado Ativo.</div>
-  }
-
+  function GenericView({ title }) { return <div className="p-4 bg-white rounded shadow text-center text-gray-500">{title} em construção...</div> }
 
   /****************
     * Main App *
@@ -511,7 +408,6 @@
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // Dados DB
     const [produtos, setProdutos] = useState([]);
     const [vendas, setVendas] = useState([]);
     const [caixas, setCaixas] = useState([]);
@@ -521,8 +417,9 @@
     const [busca, setBusca] = useState('');
     const [selected, setSelected] = useState('pdv');
 
-    // 1. Monitorar Sessão do Supabase (USANDO 'db')
     useEffect(() => {
+        if(!db) { setLoading(false); return; }
+
         db.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             if(session) fetchProfile(session.user.id);
@@ -534,95 +431,135 @@
             if(session) fetchProfile(session.user.id);
             else { setUserProfile(null); setLoading(false); }
         });
-
         return () => subscription.unsubscribe();
     }, []);
 
     async function fetchProfile(uid){
-        const { data } = await db.from('profiles').select('*').eq('id', uid).single();
-        if(data) {
-            setUserProfile(data);
-            loadData();
+        const { data, error } = await db.from('profiles').select('*').eq('id', uid).single();
+        if (error) {
+            alert("ERRO CRÍTICO: Perfil não encontrado. Verifique o banco de dados.");
+            await db.auth.signOut();
+            setLoading(false);
+            return;
         }
+        if(data) { setUserProfile(data); loadData(); }
         setLoading(false);
     }
 
     async function loadData(){
-        const p = await db.from('produtos').select('*');
-        if(p.data) setProdutos(p.data);
-
-        const v = await db.from('vendas').select('*');
-        if(v.data) setVendas(v.data);
-
-        const c = await db.from('caixas').select('*');
-        if(c.data) setCaixas(c.data);
-        
-        const s = await db.from('config').select('*').single();
-        if(s.data) setSettings(s.data.settings || {});
+        const p = await db.from('produtos').select('*'); if(p.data) setProdutos(p.data);
+        const v = await db.from('vendas').select('*'); if(v.data) setVendas(v.data);
+        const c = await db.from('caixas').select('*'); if(c.data) setCaixas(c.data);
+        const s = await db.from('config').select('*').single(); if(s.data) setSettings(s.data.settings || {});
     }
 
     async function salvarProduto(prod){
         const { error } = await db.from('produtos').insert([{...prod, preco: parseFloat(prod.preco), estoque: parseFloat(prod.estoque)}]);
-        if(!error) loadData();
+        if(!error) loadData(); else alert(error.message);
     }
 
     async function abrirCaixa(valor){
-        const novo = { usuario: userProfile.username, data_abertura: new Date().toISOString(), saldo_inicial: valor, status: 'Aberto' };
-        await db.from('caixas').insert([novo]);
-        loadData();
-        setSelected('pdv');
+        await db.from('caixas').insert([{ usuario: userProfile.username, data_abertura: new Date().toISOString(), saldo_inicial: valor, status: 'Aberto' }]);
+        loadData(); setSelected('pdv');
     }
 
     async function fecharCaixa(final, vendasTotal){
         if(!caixaAberto) return;
-        await db.from('caixas').update({ 
-            status:'Fechado', 
-            saldo_final_declarado: final,
-            data_fechamento: new Date().toISOString(),
-            diferenca: final - (caixaAberto.saldo_inicial + vendasTotal)
-        }).eq('id', caixaAberto.id);
-        loadData();
-        setSelected('caixa');
+        await db.from('caixas').update({ status:'Fechado', saldo_final_declarado: final, data_fechamento: new Date().toISOString(), diferenca: final - (caixaAberto.saldo_inicial + vendasTotal) }).eq('id', caixaAberto.id);
+        loadData(); setSelected('caixa');
     }
 
-    async function finalizarVenda(){
-        const total = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
-        const venda = { 
+    // --- VENDA COM INTEGRAÇÃO MERCADO PAGO ---
+    async function finalizarVenda(tipoPagamentoSelecionado) {
+        if (!caixaAberto) return alert("Abra o caixa antes!");
+        if (carrinho.length === 0) return alert('Carrinho vazio!');
+
+        const total = carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0);
+
+        // INTEGRAÇÃO: Se for cartão E tiver config
+        if ((tipoPagamentoSelecionado === 'Credito' || tipoPagamentoSelecionado === 'Debito') && settings.mpAccessToken && settings.mpDeviceId) {
+            const confirmacao = confirm(`Enviar R$ ${total.toFixed(2)} para a Maquininha agora?`);
+            
+            if (confirmacao) {
+                try {
+                    // 1. Enviar Ordem
+                    alert(`Enviando para o terminal ${settings.mpDeviceId}... Aguarde.`);
+                    
+                    const response = await fetch(`https://api.mercadopago.com/point/integration-api/devices/${settings.mpDeviceId}/payment-intents`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${settings.mpAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            amount: Math.round(total * 100),
+                            description: "Venda Loja",
+                            payment: {
+                                installments: 1,
+                                type: tipoPagamentoSelecionado === 'Credito' ? 'credit_card' : 'debit_card',
+                                installments_cost: 'seller'
+                            },
+                            additional_info: { external_reference: uid().toString(), print_on_terminal: true }
+                        })
+                    });
+
+                    if(!response.ok) throw new Error("Erro de comunicação com a maquininha (Verifique Token/ID)");
+
+                    const dadosMp = await response.json();
+                    const idIntencao = dadosMp.id;
+
+                    // 2. Loop de verificação (Polling)
+                    let loop = true;
+                    while(loop) {
+                        await new Promise(r => setTimeout(r, 3000)); // Espera 3s
+                        const check = await fetch(`https://api.mercadopago.com/point/integration-api/payment-intents/${idIntencao}`, {
+                             headers: { 'Authorization': `Bearer ${settings.mpAccessToken}` }
+                        });
+                        const statusData = await check.json();
+                        
+                        if(statusData.state === 'FINISHED') {
+                            alert("✅ APROVADO!");
+                            loop = false;
+                        } else if (statusData.state === 'CANCELED') {
+                            throw new Error("Cancelado na maquininha.");
+                        }
+                    }
+
+                } catch (e) {
+                    alert("Erro na Maquininha: " + e.message);
+                    return; // Aborta salvar no banco
+                }
+            }
+        }
+
+        // Salvar no Banco
+        await db.from('vendas').insert([{ 
             data: new Date().toISOString(), total, itens: carrinho, 
-            tipo_pagamento: 'Dinheiro', origem: 'PDV', vendedor: userProfile.username, caixa_id: caixaAberto.id 
-        };
-        await db.from('vendas').insert([venda]);
+            tipo_pagamento: tipoPagamentoSelecionado, origem: 'PDV', 
+            vendedor: userProfile.username, caixa_id: caixaAberto.id 
+        }]);
         
         for (const item of carrinho) {
              const prod = produtos.find(p=>p.id===item.id);
              if(prod) await db.from('produtos').update({estoque: prod.estoque - item.quantidade}).eq('id', item.id);
         }
-
-        setCarrinho([]);
-        alert('Venda ok');
-        loadData();
+        setCarrinho([]); alert('Venda Registrada!'); loadData();
     }
     
     async function salvarSettings(dados){
         const { data } = await db.from('config').select('id').limit(1);
-        if(data && data.length > 0) {
-             await db.from('config').update({ settings: dados }).eq('id', data[0].id);
-        } else {
-             await db.from('config').insert([{ settings: dados }]);
-        }
-        alert('Salvo!');
-        loadData();
+        if(data && data.length > 0) await db.from('config').update({ settings: dados }).eq('id', data[0].id);
+        else await db.from('config').insert([{ settings: dados }]);
+        alert('Configurações Salvas!'); loadData();
     }
 
     const caixaAberto = useMemo(() => caixas.find(c => c.usuario === userProfile?.username && c.status === 'Aberto'), [caixas, userProfile]);
-    const vendasTurno = useMemo(() => {
-        if(!caixaAberto) return [];
-        return vendas.filter(v => v.caixa_id === caixaAberto.id);
-    }, [vendas, caixaAberto]);
+    const vendasTurno = useMemo(() => caixaAberto ? vendas.filter(v => v.caixa_id === caixaAberto.id) : [], [vendas, caixaAberto]);
     const totalCarrinho = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
 
-    if(loading) return <div className="min-h-screen flex items-center justify-center text-white bg-cinzaEscuro">Carregando Sistema Seguro...</div>;
-    
+    // Renderizações Condicionais
+    if(configError) return <ConfigErrorScreen />;
+    if(loading) return <div className="min-h-screen flex items-center justify-center text-white bg-cinzaEscuro font-bold text-xl">Carregando Sistema...</div>;
     if(!session || !userProfile) return <Login onLogin={()=>{}} />;
 
     return (
@@ -631,27 +568,15 @@
         <div className="max-w-7xl mx-auto flex flex-1 w-full overflow-hidden">
           <Sidebar selected={selected} setSelected={setSelected} user={userProfile} />
           <main className="flex-1 p-6 overflow-y-auto">
-            
-            {selected === 'pdv' && (
-              <PDVView produtos={produtos} adicionarAoCarrinho={p=>setCarrinho([...carrinho, {...p, quantidade:1}])} 
-                    busca={busca} setBusca={setBusca} carrinho={carrinho} 
-                    removerDoCarrinho={id=>setCarrinho(carrinho.filter(i=>i.id!==id))}
-                    finalizarVenda={finalizarVenda} totalCarrinho={totalCarrinho} caixaAberto={caixaAberto} />
-            )}
-
+            {selected === 'pdv' && <PDVView produtos={produtos} adicionarAoCarrinho={p=>setCarrinho([...carrinho, {...p, quantidade:1}])} busca={busca} setBusca={setBusca} carrinho={carrinho} removerDoCarrinho={id=>setCarrinho(carrinho.filter(i=>i.id!==id))} finalizarVenda={finalizarVenda} totalCarrinho={totalCarrinho} caixaAberto={caixaAberto} />}
             {selected === 'caixa' && <CaixaView caixaAberto={caixaAberto} abrirCaixa={abrirCaixa} fecharCaixa={fecharCaixa} vendasDoTurno={vendasTurno} user={userProfile} />}
-            
             {selected === 'produtos' && <ProdutosView produtos={produtos} salvarProduto={salvarProduto} user={userProfile} />}
-            
-            {selected === 'usuarios' && userProfile.role === 'admin' && <UsuariosView salvarUsuarios={()=>{}} currentUser={userProfile} />}
-
+            {selected === 'usuarios' && userProfile.role === 'admin' && <UsuariosView currentUser={userProfile} />}
             {selected === 'config' && userProfile.role === 'admin' && <ConfigView settings={settings} salvarSettings={salvarSettings} user={userProfile} />}
-
-            {selected === 'relatorios' && <RelatoriosView />}
-            {selected === 'avancado' && <RelatorioAvancado />}
-            {selected === 'fiado' && <FiadoView />}
-            {selected === 'comandas' && <ComandasView />}
-
+            {selected === 'relatorios' && <GenericView title="Relatórios" />}
+            {selected === 'avancado' && <GenericView title="Avançado" />}
+            {selected === 'fiado' && <GenericView title="Fiado" />}
+            {selected === 'comandas' && <GenericView title="Comandas" />}
           </main>
         </div>
       </div>
