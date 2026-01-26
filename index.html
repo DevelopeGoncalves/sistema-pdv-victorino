@@ -3,13 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>PDV - Victorino.eng (Full Screen)</title>
+  <title>PDV - Victorino.eng (System)</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, onSnapshot, updateDoc, doc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // SUBSTITUA PELAS SUAS CHAVES DO FIREBASE
+    const firebaseConfig = {
+      apiKey: "SUA_API_KEY",
+      authDomain: "SEU_PROJETO.firebaseapp.com",
+      projectId: "SEU_PROJECT_ID",
+      storageBucket: "SEU_PROJETO.appspot.com",
+      messagingSenderId: "...",
+      appId: "..."
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    
+    // Habilita funcionamento Offline
+    enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code == 'failed-precondition') {
+            console.log('Múltiplas abas abertas. O modo offline funciona em apenas uma aba por vez.');
+        } else if (err.code == 'unimplemented') {
+            console.log('O navegador atual não suporta persistência offline.');
+        }
+    });
+
+    window.db = db;
+    window.firebaseMethods = { collection, addDoc, getDocs, onSnapshot, updateDoc, doc, deleteDoc };
+  </script>
   
   <script>
     tailwind.config = {
@@ -35,10 +65,9 @@
     body { 
         font-family: 'Inter', sans-serif; 
         -webkit-font-smoothing: antialiased;
-        font-size: 1rem; /* Aumentado levemente base font */
+        font-size: 1rem;
     }
     
-    /* Scrollbar mais robusta para facilitar clique */
     ::-webkit-scrollbar { width:8px; height:8px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius:4px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -50,22 +79,81 @@
     @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
     .animate-slide-left { animation: slideInLeft 0.3s ease-out forwards; }
 
-    /* Animação para o Menu Mobile */
     @keyframes slideInMenu { from { transform: translateX(-100%); } to { transform: translateX(0); } }
     .animate-slide-menu { animation: slideInMenu 0.3s ease-out forwards; }
 
     .cart-sticky-container { position: sticky; top: 0; z-index: 20; }
 
+    /* ESTILOS DE IMPRESSÃO */
     @media print {
-        body * { visibility: hidden; }
-        #relatorio-print-area, #relatorio-print-area * { visibility: visible; }
-        #relatorio-print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 15px; background: white; box-shadow: none !important; border: none !important; }
-        .no-print { display: none !important; }
-        .print-table { width: 100%; font-size: 10px; border-collapse: collapse; }
-        .print-table th, .print-table td { padding: 4px; border: 1px solid #000; color: black; }
-        .break-page { page-break-before: always; }
-        .bg-indigo-100 { background-color: #eee !important; -webkit-print-color-adjust: exact; }
-        .text-white { color: black !important; }
+        @page { margin: 1cm; size: auto; }
+        
+        html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        header, aside, .no-print, button {
+            display: none !important;
+        }
+
+        #root, main {
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+            position: static !important;
+        }
+
+        #relatorio-print-area {
+            display: block !important;
+            width: 100% !important;
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            visibility: visible !important;
+        }
+
+        #relatorio-print-area * {
+            visibility: visible !important;
+        }
+
+        .bg-white, .bg-gray-50 {
+            background-color: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+        
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .break-page {
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+        }
+        
+        table { page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+
+        .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+        }
+        .print-table th, .print-table td {
+            border: 1px solid #ddd !important;
+            padding: 4px 8px;
+            color: black !important;
+        }
     }
   </style>
 </head>
@@ -79,33 +167,10 @@
   /* ================= UTILS & CONFIG ================= */
   const CATEGORIAS_PADRAO = ["Bebidas", "Comida", "Cigarros", "Diversos", "Outros"];
 
-  const initialProdutosDefault = [
-    { id: 1, nome: "Coca-Cola 2L", preco: 8.5, estoque: 50, categoria: "Bebidas", status: "Normal" },
-    { id: 2, nome: "Cerveja Skol Lata", preco: 3.2, estoque: 120, categoria: "Bebidas", status: "Normal" },
-    { id: 3, nome: "Cigarro Marlboro", preco: 12.0, estoque: 30, categoria: "Cigarros", status: "Normal" },
-    { id: 4, nome: "Palito de Dente", preco: 0.5, estoque: 200, categoria: "Diversos", status: "Normal" },
-    { id: 5, nome: "Água Mineral 500ml", preco: 2.0, estoque: 100, categoria: "Bebidas", status: "Normal" },
-    { id: 6, nome: "Heineken Long Neck", preco: 7.5, estoque: 60, categoria: "Bebidas", status: "Normal" },
-    { id: 7, nome: "Heineken Lata", preco: 5.5, estoque: 24, categoria: "Bebidas", status: "Normal" }
-  ];
-
-  const initialUsersDefault = [
-    { id: 999, username: 'admin', password: 'admin', role: 'admin' }
-  ];
-
   function uid(){ return Date.now() + Math.floor(Math.random()*9999); }
   
   function currency(v){ 
     return Number(v||0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function getLocal(key, fallback){
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : fallback;
-  }
-
-  function setLocal(key, value){
-    localStorage.setItem(key, JSON.stringify(value));
   }
 
   /* ================= TELA DE LOGIN ================= */
@@ -116,6 +181,7 @@
 
     function submit(e){
       e.preventDefault();
+      // Em produção, isso seria autenticação via Firebase Auth, aqui simula com users do Firestore
       const foundUser = users.find(user => user.username.toLowerCase() === u.trim().toLowerCase() && user.password === p);
       if(foundUser){
         onLogin(foundUser);
@@ -130,8 +196,8 @@
         <div className="relative w-full max-w-3xl h-auto md:h-[450px] bg-black/40 border border-white/10 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-fade-in">
             <div className="w-full md:w-5/12 p-8 flex flex-col justify-center items-center text-center bg-gradient-to-br from-black/60 to-transparent border-r border-white/5">
                 <div className="mb-4 p-4 rounded-full border-2 border-dourado shadow-[0_0_15px_rgba(212,175,55,0.3)] bg-black">
-                    <img src="img/victorino.png" alt="Victorino" className="w-16 h-16 object-contain" onError={(e)=>{e.target.style.display='none'}} />
-                    <span className="text-dourado text-3xl font-bold">V</span>
+                    <img src="img/victorino.png" alt="Victorino" className="w-16 h-16 object-contain rounded-full" onError={(e)=>{e.target.style.display='none'}} />
+                    <span className="text-dourado text-3xl font-bold" style={{display: 'none'}}>V</span>
                 </div>
                 <h1 className="text-3xl font-extrabold text-white tracking-wide">VICTORINO<span className="text-dourado">.ENG</span></h1>
                 <p className="text-gray-300 mt-2 text-sm font-light">Sistema de Gestão & Inteligência</p>
@@ -161,13 +227,12 @@
       <header className="bg-white shadow-sm sticky top-0 z-30 h-16 flex-none border-b border-gray-200 w-full">
         <div className="w-full px-4 md:px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Botão Menu Mobile */}
             <button onClick={onToggleMenu} className="md:hidden text-gray-600 hover:text-black focus:outline-none">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
 
-            <div className="w-10 h-10 rounded-full bg-black border border-dourado flex items-center justify-center shadow-sm">
-                <span className="text-dourado font-bold text-lg">V</span>
+            <div className="w-10 h-10 rounded-full bg-black border border-dourado flex items-center justify-center shadow-sm overflow-hidden">
+                <img src="img/victorino.png" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="text-lg font-extrabold text-gray-800 leading-tight">Victorino<span className="text-dourado">.eng</span></div>
@@ -216,14 +281,11 @@
 
     const menuPermitido = itens.filter(i => i.roles.includes(user.role));
 
-    // Classe base para desktop e mobile
     const baseClasses = "bg-white border-r border-gray-200 flex flex-col h-full shadow-sm transition-transform duration-300";
-    // Classes para comportamento Mobile
     const mobileClasses = `fixed inset-y-0 left-0 z-40 w-72 transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static md:w-64 lg:w-72`;
 
     return (
       <>
-        {/* Overlay Mobile */}
         {mobileOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={()=>setMobileOpen(false)}></div>}
         
         <aside className={`${baseClasses} ${mobileClasses}`}>
@@ -240,20 +302,26 @@
               </button>
             ))}
           </div>
+          
+          {/* --- RODAPÉ DA SIDEBAR COM LOGO E LINK --- */}
           <div className="p-4 border-t bg-gray-50/50">
-              <div className="flex items-center gap-3 p-2">
-                  <div>
-                      <div className="font-bold text-xs text-gray-800 uppercase tracking-wide">Victorino.eng</div>
-                      <div className="text-[11px] text-gray-500">Suporte Técnico</div>
+              <a href="https://developegoncalves.github.io/meu-portifolio/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg transition duration-200 group cursor-pointer">
+                  {/* Logo Redonda */}
+                  <img src="img/victorino.png" alt="Victorino.eng" className="w-10 h-10 object-cover rounded-full border border-gray-200 bg-white" />
+                  
+                  {/* Textos */}
+                  <div className="flex flex-col">
+                      <div className="font-bold text-sm text-gray-800 group-hover:text-indigo-600 transition leading-tight">Victorino.eng</div>
+                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Suporte Técnico</div>
                   </div>
-              </div>
+              </a>
           </div>
         </aside>
       </>
     );
   }
 
-  /* ================= COMPONENTE: AVARIAS (NOVO) ================= */
+  /* ================= COMPONENTE: AVARIAS ================= */
   function AvariasView({ produtos, avarias, registrarAvaria, user }) {
       const [busca, setBusca] = useState('');
       const [prodSelecionado, setProdSelecionado] = useState(null);
@@ -292,7 +360,6 @@
               </h2>
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  {/* Formulário de Registro */}
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 xl:col-span-1 h-fit">
                       <h3 className="font-bold text-gray-700 mb-4 text-base uppercase border-b pb-2">Registrar Nova Perda</h3>
                       
@@ -354,7 +421,6 @@
                       </form>
                   </div>
 
-                  {/* Tabela de Histórico */}
                   <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[600px]">
                       <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                           <h3 className="font-bold text-gray-700 text-base">Histórico de Perdas</h3>
@@ -504,26 +570,26 @@
   }
 
   /* ================= COMPONENTE: USUARIOS ================= */
-  function UsuariosView({ users, salvarUsuarios, currentUser }) {
+  function UsuariosView({ users, currentUser }) {
       const [novoUser, setNovoUser] = useState('');
       const [novaSenha, setNovaSenha] = useState('');
       const [novoRole, setNovoRole] = useState('funcionario');
+      const { addDoc, collection, deleteDoc, doc } = window.firebaseMethods;
+      const db = window.db;
 
-      function cadastrar(e){
+      async function cadastrar(e){
           e.preventDefault();
           if(!novoUser || !novaSenha) return alert("Preencha todos os campos");
           if(users.some(u => u.username.toLowerCase() === novoUser.toLowerCase())) return alert("Usuário já existe!");
-          const user = { id: uid(), username: novoUser.trim(), password: novaSenha, role: novoRole };
-          salvarUsuarios([...users, user]);
+          await addDoc(collection(db, "users"), { username: novoUser.trim(), password: novaSenha, role: novoRole });
           setNovoUser(''); setNovaSenha(''); alert(`Usuário ${novoUser} cadastrado com sucesso!`);
       }
-      function remover(id){
+      async function remover(id){
           if(id === currentUser.id) return alert("Você não pode se excluir!");
           const userToDelete = users.find(u=>u.id===id);
           if(!confirm(`Tem certeza que deseja remover o acesso de ${userToDelete.username}?`)) return;
-          const restantes = users.filter(u => u.id !== id);
-          if(restantes.filter(u=>u.role==='admin').length === 0) return alert("O sistema precisa de pelo menos 1 admin.");
-          salvarUsuarios(restantes);
+          if(users.filter(u=>u.role==='admin' && u.id !== id).length === 0) return alert("O sistema precisa de pelo menos 1 admin.");
+          await deleteDoc(doc(db, "users", id));
       }
       return (
           <div className="space-y-6 animate-fade-in w-full max-w-[1200px] mx-auto">
@@ -682,50 +748,44 @@
   }
 
   /* ================= COMPONENTE: FIADO ================= */
-  function FiadoView({ fiados, updateFiados, caixaAberto, updateVendasLocal, vendas }) {
+  function FiadoView({ fiados, caixaAberto, vendas }) {
       const [nomeNovo, setNomeNovo] = useState('');
       const [valorPagamento, setValorPagamento] = useState('');
       const [clienteSelecionado, setClienteSelecionado] = useState(null);
+      const { addDoc, collection, updateDoc, doc } = window.firebaseMethods;
+      const db = window.db;
 
-      function criarDevedor(e){
+      async function criarDevedor(e){
           e.preventDefault();
           if(!nomeNovo) return;
-          const novo = { id: uid(), nome: nomeNovo, saldoDevedor: 0, historico: [] };
-          updateFiados([...fiados, novo]);
+          await addDoc(collection(db, "fiados"), { nome: nomeNovo, saldoDevedor: 0, historico: [] });
           setNomeNovo('');
           alert('Cliente cadastrado.');
       }
 
-      function receberPagamento(e){
+      async function receberPagamento(e){
           e.preventDefault();
           if(!clienteSelecionado || !valorPagamento) return;
           const valor = parseFloat(valorPagamento);
           if(valor <= 0) return alert("Valor inválido");
           
           if(confirm(`Receber ${currency(valor)} de ${clienteSelecionado.nome}?`)){
-              const novosFiados = fiados.map(f => {
-                  if(f.id === clienteSelecionado.id){
-                      return {
-                          ...f,
-                          saldoDevedor: f.saldoDevedor - valor,
-                          historico: [...f.historico, { data: new Date().toISOString(), tipo: 'PAGAMENTO', valor: valor }]
-                      };
-                  }
-                  return f;
+              const clienteRef = doc(db, "fiados", clienteSelecionado.id);
+              await updateDoc(clienteRef, {
+                  saldoDevedor: clienteSelecionado.saldoDevedor - valor,
+                  historico: [...clienteSelecionado.historico, { data: new Date().toISOString(), tipo: 'PAGAMENTO', valor: valor }]
               });
-              updateFiados(novosFiados);
 
               if(caixaAberto){
                   if(confirm("Lançar entrada no CAIXA ABERTO?")){
-                      const entradaCaixa = {
-                          id: uid(), data: new Date().toISOString(),
+                      await addDoc(collection(db, "vendas"), {
+                          data: new Date().toISOString(),
                           itens: [], total: valor,
                           origem: `Receb. Fiado - ${clienteSelecionado.nome}`,
                           caixaId: caixaAberto.id,
                           tipoPagamento: 'Dinheiro',
                           vendedor: caixaAberto.usuario
-                      };
-                      updateVendasLocal([...vendas, entradaCaixa]);
+                      });
                   }
               }
               setValorPagamento('');
@@ -1046,29 +1106,42 @@
     );
   }
 
-  /* ================= COMPONENTE: PRODUTOS ================= */
-  function ProdutosView({produtos, salvarProdutos, user}){
+  /* ================= COMPONENTE: PRODUTOS (ATUALIZADO COM FILTRO DE ESTOQUE) ================= */
+  function ProdutosView({produtos, user}){
     const [form, setForm] = useState({ id:null, nome:'', preco:'', estoque:'', categoria:'Outros' });
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('');
+    const [filterEstoque, setFilterEstoque] = useState('');
+    const { addDoc, collection, updateDoc, doc, deleteDoc } = window.firebaseMethods;
+    const db = window.db;
 
-    function submit(e){
+    async function submit(e){
       e.preventDefault();
       if(!form.nome || !form.preco || !form.estoque) return alert('Preencha os campos obrigatórios');
-      const novo = { ...form, preco: Number(form.preco), estoque: Number(form.estoque), id: form.id || uid(), status: 'Normal' };
-      let novos;
-      if(form.id) novos = produtos.map(p=> p.id===form.id ? novo : p);
-      else novos = [...produtos, novo];
-      salvarProdutos(novos);
+      const produtoData = { ...form, preco: Number(form.preco), estoque: Number(form.estoque), status: 'Normal' };
+      
+      if(form.id) {
+          delete produtoData.id;
+          await updateDoc(doc(db, "produtos", form.id), produtoData);
+      } else {
+          delete produtoData.id;
+          await addDoc(collection(db, "produtos"), produtoData);
+      }
       setForm({ id:null, nome:'', preco:'', estoque:'', categoria:'Outros' });
     }
     function editar(p){ setForm({...p, preco: String(p.preco), estoque: String(p.estoque)}); }
-    function excluir(p){ if(!confirm(`Excluir ${p.nome}?`)) return; salvarProdutos(produtos.filter(x=>x.id!==p.id)); }
+    async function excluir(p){ if(!confirm(`Excluir ${p.nome}?`)) return; await deleteDoc(doc(db, "produtos", p.id)); }
 
     const produtosFiltrados = produtos.filter(p => {
         const matchName = p.nome.toLowerCase().includes(search.toLowerCase());
         const matchCat = filterCat === '' || p.categoria === filterCat;
-        return matchName && matchCat;
+        
+        let matchEstoque = true;
+        if (filterEstoque === 'baixo') matchEstoque = p.estoque > 0 && p.estoque < 10;
+        else if (filterEstoque === 'zerado') matchEstoque = p.estoque === 0;
+        else if (filterEstoque === 'normal') matchEstoque = p.estoque >= 10;
+        
+        return matchName && matchCat && matchEstoque;
     });
 
     if (user.role !== 'admin') return <div className="p-6 bg-yellow-50 text-yellow-800 m-4 rounded-xl text-center font-bold">Acesso restrito a administradores.</div>;
@@ -1106,14 +1179,22 @@
         </div>
         
         <div className="xl:col-span-2 flex flex-col gap-4">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row gap-4 items-center">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-3 items-center">
                 <div className="flex-1 relative w-full">
                     <span className="absolute left-3 top-3 text-gray-400 text-sm">🔍</span>
-                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar no estoque..." className="w-full pl-9 p-2 border rounded-lg outline-none focus:border-indigo-500 h-11 text-base" />
+                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nome..." className="w-full pl-9 p-2 border rounded-lg outline-none focus:border-indigo-500 h-11 text-base" />
                 </div>
-                <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} className="w-full sm:w-auto p-2 border rounded-lg bg-gray-50 outline-none h-11 text-base">
-                    <option value="">Todas as Categorias</option>
+                
+                <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} className="w-full md:w-auto p-2 border rounded-lg bg-gray-50 outline-none h-11 text-base">
+                    <option value="">Todas Categorias</option>
                     {CATEGORIAS_PADRAO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+
+                <select value={filterEstoque} onChange={e=>setFilterEstoque(e.target.value)} className="w-full md:w-auto p-2 border rounded-lg bg-gray-50 outline-none h-11 text-base font-medium">
+                    <option value="">Status Estoque (Todos)</option>
+                    <option value="baixo">⚠️ Baixo (&lt; 10)</option>
+                    <option value="zerado">🛑 Zerado (0)</option>
+                    <option value="normal">✅ Normal</option>
                 </select>
             </div>
 
@@ -1126,14 +1207,22 @@
                       <tr key={p.id} className="hover:bg-gray-50 transition">
                         <td className="p-4 font-medium text-gray-800">{p.nome} <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded ml-2 hidden sm:inline-block">{p.categoria}</span></td>
                         <td className="p-4 text-right font-bold text-gray-700">{currency(p.preco)}</td>
-                        <td className="p-4 text-right"><span className={`px-2 py-1 rounded text-xs font-bold ${p.estoque < 10 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>{p.estoque} un.</span></td>
+                        <td className="p-4 text-right">
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                p.estoque === 0 ? 'bg-red-200 text-red-800 border border-red-300' :
+                                p.estoque < 10 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 
+                                'bg-green-100 text-green-700'
+                            }`}>
+                                {p.estoque === 0 ? 'ESGOTADO' : `${p.estoque} un.`}
+                            </span>
+                        </td>
                         <td className="p-4 text-center space-x-2">
                             <button onClick={()=>editar(p)} className="text-indigo-600 hover:text-indigo-800 font-bold text-xs uppercase border border-indigo-200 px-3 py-1 rounded">Editar</button>
                             <button onClick={()=>excluir(p)} className="text-red-500 hover:text-red-700 font-bold text-xs uppercase border border-red-200 px-3 py-1 rounded">Excluir</button>
                         </td>
                       </tr>
                     ))}
-                    {produtosFiltrados.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-400">Nenhum produto encontrado.</td></tr>}
+                    {produtosFiltrados.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-400">Nenhum produto encontrado com este filtro.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -1238,10 +1327,12 @@
     );
   }
 
-  function RelatorioAvancado({ vendas, produtos, limparDadosPorData, users }) { 
+  function RelatorioAvancado({ vendas, produtos, users }) { 
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [filtroUsuario, setFiltroUsuario] = useState('');
+    const { deleteDoc, doc } = window.firebaseMethods;
+    const db = window.db;
 
     const vendasFiltradas = useMemo(() => {
       let filtered = vendas;
@@ -1270,6 +1361,17 @@
     }, [vendasFiltradas]);
 
     const totalGeralPeriodo = vendasFiltradas.reduce((acc, v) => acc + v.total, 0);
+
+    async function limparDadosPorData(dataISO) {
+        if (!confirm(`Apagar dados antigos?`)) return;
+        const dataFiltro = dataISO;
+        const vendasParaApagar = vendas.filter(v => (v.data || '').split('T')[0] <= dataFiltro);
+        
+        for (const venda of vendasParaApagar) {
+            await deleteDoc(doc(db, "vendas", venda.id));
+        }
+        alert("Limpeza concluída.");
+    }
 
     return (
       <div className="space-y-6 animate-fade-in w-full max-w-[1600px] mx-auto">
@@ -1360,43 +1462,44 @@
     const [busca, setBusca] = useState('');
     const [selected, setSelected] = useState('pdv');
 
+    const { collection, onSnapshot, addDoc, updateDoc, doc } = window.firebaseMethods;
+    const db = window.db;
+
     const caixaAberto = useMemo(() => {
         if(!user) return null;
         return caixas.find(c => c.usuario === user.username && c.status === 'Aberto');
     }, [caixas, user]);
 
     useEffect(() => {
-      setProdutos(getLocal('produtos', initialProdutosDefault));
-      setVendas(getLocal('vendas', []));
-      setComandas(getLocal('comandas', []));
-      setFiados(getLocal('fiados', []));
-      setCaixas(getLocal('caixas', []));
-      setUsers(getLocal('users', initialUsersDefault));
-      setAvarias(getLocal('avarias', [])); 
+      // Escuta em Tempo Real (Firebase)
+      const unsubProdutos = onSnapshot(collection(db, "produtos"), (snap) => setProdutos(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      const unsubVendas = onSnapshot(collection(db, "vendas"), (snap) => setVendas(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      const unsubComandas = onSnapshot(collection(db, "comandas"), (snap) => setComandas(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      const unsubFiados = onSnapshot(collection(db, "fiados"), (snap) => setFiados(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      const unsubCaixas = onSnapshot(collection(db, "caixas"), (snap) => setCaixas(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+          const fetchedUsers = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+          // Se não houver usuários, cria um temporário na memória
+          setUsers(fetchedUsers.length > 0 ? fetchedUsers : [{ id: 'temp_admin', username: 'admin', password: 'admin', role: 'admin' }]);
+      });
+      const unsubAvarias = onSnapshot(collection(db, "avarias"), (snap) => setAvarias(snap.docs.map(d => ({ ...d.data(), id: d.id }))));
+      
       setLoading(false);
+      return () => { unsubProdutos(); unsubVendas(); unsubComandas(); unsubFiados(); unsubCaixas(); unsubUsers(); unsubAvarias(); };
     }, []);
 
-    // Persistência
-    function salvarProdutos(novos) { setProdutos(novos); setLocal('produtos', novos); }
-    function updateVendasLocal(novasVendas) { setVendas(novasVendas); setLocal('vendas', novasVendas); }
-    function updateComandasLocal(novasComandas) { setComandas(novasComandas); setLocal('comandas', novasComandas); }
-    function updateFiadosLocal(novosFiados) { setFiados(novosFiados); setLocal('fiados', novasFiados); }
-    function updateCaixasLocal(novosCaixas) { setCaixas(novosCaixas); setLocal('caixas', novosCaixas); }
-    function salvarUsuarios(novosUsers) { setUsers(novosUsers); setLocal('users', novosUsers); }
-    function salvarAvarias(novas) { setAvarias(novas); setLocal('avarias', novas); }
-
     // Funções de Negócio
-    function abrirCaixa(valorInicial) {
+    async function abrirCaixa(valorInicial) {
         if(caixaAberto) return alert("Você já tem um caixa aberto!");
-        const novoCaixa = { id: uid(), usuario: user.username, dataAbertura: new Date().toISOString(), saldoInicial: valorInicial, status: 'Aberto' };
-        updateCaixasLocal([...caixas, novoCaixa]); alert(`Caixa aberto!`); setSelected('pdv');
+        await addDoc(collection(db, "caixas"), { usuario: user.username, dataAbertura: new Date().toISOString(), saldoInicial: valorInicial, status: 'Aberto' });
+        alert(`Caixa aberto!`); setSelected('pdv');
     }
-    function fecharCaixa(valorFinalDeclarado) {
+    async function fecharCaixa(valorFinalDeclarado) {
         if(!caixaAberto) return;
         const vendasDoTurno = vendas.filter(v => v.data >= caixaAberto.dataAbertura && (!v.caixaId || v.caixaId === caixaAberto.id));
         const totalDinheiroVendido = vendasDoTurno.filter(v => v.tipoPagamento !== 'Fiado').reduce((acc, v) => acc + v.total, 0);
-        const novosCaixas = caixas.map(c => c.id === caixaAberto.id ? { ...caixaAberto, status: 'Fechado', dataFechamento: new Date().toISOString(), saldoFinalDeclarado: valorFinalDeclarado, totalVendido: totalDinheiroVendido } : c);
-        updateCaixasLocal(novosCaixas); alert(`Caixa Fechado!`); setSelected('caixa'); 
+        await updateDoc(doc(db, "caixas", caixaAberto.id), { status: 'Fechado', dataFechamento: new Date().toISOString(), saldoFinalDeclarado: valorFinalDeclarado, totalVendido: totalDinheiroVendido });
+        alert(`Caixa Fechado!`); setSelected('caixa'); 
     }
 
     function adicionarAoCarrinho(produto){ 
@@ -1413,78 +1516,92 @@
     }
     function removerDoCarrinho(id){ setCarrinho(carrinho.filter(i=>i.id!==id)); }
 
-    function finalizarVenda(metodoSelecionado){
+    async function finalizarVenda(metodoSelecionado){
       if(!caixaAberto) return alert("Abra o caixa.");
       const total = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
-      const venda = { id: uid(), data: new Date().toISOString(), itens: carrinho, total: total, origem: `PDV Balcão - ${metodoSelecionado}`, caixaId: caixaAberto.id, tipoPagamento: metodoSelecionado, vendedor: user.username };
-      const novosProdutos = [...produtos];
-      carrinho.forEach(item => { const pIndex = novosProdutos.findIndex(p => p.id === item.id); if(pIndex > -1) novosProdutos[pIndex].estoque -= item.quantidade; });
-      salvarProdutos(novosProdutos); updateVendasLocal([...vendas, venda]); setCarrinho([]); alert(`Venda finalizada (${metodoSelecionado})!`);
+      const vendaData = new Date().toISOString();
+      
+      // 1. Registrar Venda
+      await addDoc(collection(db, "vendas"), { data: vendaData, itens: carrinho, total: total, origem: `PDV Balcão - ${metodoSelecionado}`, caixaId: caixaAberto.id, tipoPagamento: metodoSelecionado, vendedor: user.username });
+
+      // 2. Atualizar Estoque
+      carrinho.forEach(async (item) => {
+          await updateDoc(doc(db, "produtos", item.id), { estoque: item.estoque - item.quantidade });
+      });
+      setCarrinho([]); alert(`Venda finalizada (${metodoSelecionado})!`);
     }
 
-    function finalizarFiado(clienteId){
+    async function finalizarFiado(clienteId){
         if(!caixaAberto) return alert("Abra o caixa.");
         let cliente = fiados.find(f => f.id == clienteId);
         if(!cliente) return alert("Cliente não encontrado!");
         const total = carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0);
-        let novosFiados = fiados.map(f => {
-            if(f.id === cliente.id) { return { ...f, saldoDevedor: f.saldoDevedor + total, historico: [...f.historico, { data: new Date().toISOString(), tipo: 'COMPRA', valor: total, itens: carrinho.map(i=>`${i.quantidade}x ${i.nome}`).join(', ') }] }; }
-            return f;
+        const vendaData = new Date().toISOString();
+
+        // 1. Atualizar Fiado
+        await updateDoc(doc(db, "fiados", cliente.id), {
+            saldoDevedor: cliente.saldoDevedor + total,
+            historico: [...cliente.historico, { data: vendaData, tipo: 'COMPRA', valor: total, itens: carrinho.map(i=>`${i.quantidade}x ${i.nome}`).join(', ') }]
         });
-        const venda = { id: uid(), data: new Date().toISOString(), itens: carrinho, total: total, origem: `Fiado - ${cliente.nome}`, caixaId: caixaAberto.id, tipoPagamento: 'Fiado', vendedor: user.username };
-        const novosProdutos = [...produtos];
-        carrinho.forEach(item => { const pIndex = novosProdutos.findIndex(p => p.id === item.id); if(pIndex > -1) novosProdutos[pIndex].estoque -= item.quantidade; });
-        salvarProdutos(novosProdutos); updateFiadosLocal(novosFiados); updateVendasLocal([...vendas, venda]); setCarrinho([]); alert(`Fiado registrado para ${cliente.nome}.`);
+        
+        // 2. Registrar Venda
+        await addDoc(collection(db, "vendas"), { data: vendaData, itens: carrinho, total: total, origem: `Fiado - ${cliente.nome}`, caixaId: caixaAberto.id, tipoPagamento: 'Fiado', vendedor: user.username });
+
+        // 3. Atualizar Estoque
+        carrinho.forEach(async (item) => {
+            await updateDoc(doc(db, "produtos", item.id), { estoque: item.estoque - item.quantidade });
+        });
+        setCarrinho([]); alert(`Fiado registrado para ${cliente.nome}.`);
     }
     
-    function abrirComanda(){
+    async function abrirComanda(){
       if(!caixaAberto) return alert("Abra o caixa!");
       const nomeCliente = prompt("Nome do cliente:"); if (!nomeCliente) return;
-      const novosProdutos = [...produtos];
-      carrinho.forEach(item => { const pIndex = novosProdutos.findIndex(p => p.id === item.id); if(pIndex > -1) novosProdutos[pIndex].estoque -= item.quantidade; });
-      salvarProdutos(novosProdutos);
-      const novaComanda = { id: uid(), dataAbertura: new Date().toISOString(), nomeCliente: nomeCliente, mesaFixa: `MESA ${comandas.length + 1}`, valorInicial: carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0), status: 'Aberta', itensPrePagos: carrinho.map(i => ({...i, quantidadeTotal: i.quantidade, quantidadeDisponivel: i.quantidade})), };
-      updateComandasLocal([...comandas, novaComanda]); setCarrinho([]); setSelected('comandas');
+      
+      // 1. Atualizar Estoque (Baixa Imediata)
+      carrinho.forEach(async (item) => {
+          await updateDoc(doc(db, "produtos", item.id), { estoque: item.estoque - item.quantidade });
+      });
+
+      // 2. Criar Comanda
+      await addDoc(collection(db, "comandas"), { 
+          dataAbertura: new Date().toISOString(), 
+          nomeCliente: nomeCliente, 
+          mesaFixa: `MESA ${comandas.length + 1}`, 
+          valorInicial: carrinho.reduce((s,i)=> s + i.preco * i.quantidade, 0), 
+          status: 'Aberta', 
+          itensPrePagos: carrinho.map(i => ({...i, quantidadeTotal: i.quantidade, quantidadeDisponivel: i.quantidade}))
+      });
+      setCarrinho([]); setSelected('comandas');
     }
     
-    function consumirItemPrePago(comandaId, itemId, qtd) {
-        const novosComandas = comandas.map(c => { if(c.id === comandaId) { const novosItens = c.itensPrePagos.map(i => i.id === itemId ? {...i, quantidadeDisponivel: i.quantidadeDisponivel - qtd} : i); return { ...c, itensPrePagos: novosItens }; } return c; });
-        updateComandasLocal(novosComandas);
+    async function consumirItemPrePago(comandaId, itemId, qtd) {
+        const comanda = comandas.find(c => c.id === comandaId);
+        const novosItens = comanda.itensPrePagos.map(i => i.id === itemId ? {...i, quantidadeDisponivel: i.quantidadeDisponivel - qtd} : i);
+        await updateDoc(doc(db, "comandas", comandaId), { itensPrePagos: novosItens });
     }
     
-    function fecharComandaEGerarVenda(comanda) {
+    async function fecharComandaEGerarVenda(comanda) {
       if(!caixaAberto) return;
       if (!confirm(`Confirmar recebimento da comanda de ${comanda.nomeCliente}?\nValor: ${currency(comanda.valorInicial)}`)) return;
-      const venda = { id: uid(), data: new Date().toISOString(), itens: comanda.itensPrePagos, total: comanda.valorInicial, origem: `Comanda ${comanda.nomeCliente}`, caixaId: caixaAberto.id, tipoPagamento: 'Dinheiro', vendedor: user.username };
-      const novosComandas = comandas.map(c => { if (c.id === comanda.id) { return { ...c, status: 'Fechada', dataFechamento: venda.data }; } return c; });
-      updateVendasLocal([...vendas, venda]); updateComandasLocal(novosComandas); 
+      const vendaData = new Date().toISOString();
+      
+      await addDoc(collection(db, "vendas"), { data: vendaData, itens: comanda.itensPrePagos, total: comanda.valorInicial, origem: `Comanda ${comanda.nomeCliente}`, caixaId: caixaAberto.id, tipoPagamento: 'Dinheiro', vendedor: user.username });
+      await updateDoc(doc(db, "comandas", comanda.id), { status: 'Fechada', dataFechamento: vendaData });
       setTimeout(() => alert("Comanda fechada com sucesso!"), 100);
     }
 
-    function limparDadosPorData(dataISO) {
-        if (!confirm(`Apagar dados antigos?`)) return;
-        const dataFiltro = dataISO;
-        const novasVendas = vendas.filter(v => (v.data || '').split('T')[0] > dataFiltro);
-        const novasComandas = comandas.filter(c => c.status === 'Aberta' || (c.dataAbertura || '').split('T')[0] > dataFiltro);
-        updateVendasLocal(novasVendas); updateComandasLocal(novasComandas); alert("Limpeza concluída.");
-    }
-
     /* === FUNÇÃO DE REGISTRO DE AVARIA (NOVA) === */
-    function registrarAvaria(produtoId, qtd, motivo) {
-        const prodIndex = produtos.findIndex(p => p.id === produtoId);
-        if (prodIndex < 0) return;
-        const produto = produtos[prodIndex];
-
+    async function registrarAvaria(produtoId, qtd, motivo) {
+        const produto = produtos.find(p => p.id === produtoId);
+        if (!produto) return;
         if (produto.estoque < qtd) return alert('Erro: A quantidade informada é maior que o estoque atual!');
 
         // 1. Atualizar Estoque (Diminuir)
-        const novosProdutos = [...produtos];
-        novosProdutos[prodIndex].estoque -= qtd;
-        salvarProdutos(novosProdutos);
+        await updateDoc(doc(db, "produtos", produtoId), { estoque: produto.estoque - qtd });
 
         // 2. Criar Registro de Avaria
-        const novaAvaria = {
-            id: uid(),
+        await addDoc(collection(db, "avarias"), {
             data: new Date().toISOString(),
             produtoId: produto.id,
             produtoNome: produto.nome,
@@ -1493,9 +1610,7 @@
             motivo: motivo,
             valorPerdido: produto.preco * qtd,
             usuario: user.username
-        };
-
-        salvarAvarias([...avarias, novaAvaria]);
+        });
         alert('Avaria registrada com sucesso! Estoque atualizado.');
     }
 
@@ -1523,13 +1638,13 @@
                     fiados={fiados} setSelected={setSelected} />
             )}
             {selected === 'caixa' && <CaixaView caixaAberto={caixaAberto} abrirCaixa={abrirCaixa} fecharCaixa={fecharCaixa} vendasDoTurno={vendasDoCaixaAtual} user={user} />}
-            {selected === 'usuarios' && user.role === 'admin' && <UsuariosView users={users} salvarUsuarios={salvarUsuarios} currentUser={user} />}
-            {selected === 'fiado' && <FiadoView fiados={fiados} updateFiados={updateFiadosLocal} caixaAberto={caixaAberto} updateVendasLocal={updateVendasLocal} vendas={vendas} />}
+            {selected === 'usuarios' && user.role === 'admin' && <UsuariosView users={users} currentUser={user} />}
+            {selected === 'fiado' && <FiadoView fiados={fiados} caixaAberto={caixaAberto} vendas={vendas} />}
             {selected === 'comandas' && <ComandasView comandas={comandas} fecharComandaEGerarVenda={fecharComandaEGerarVenda} consumirItemPrePago={consumirItemPrePago} caixaAberto={caixaAberto} />}
             {selected === 'intelligence' && <IntelligenceView produtos={produtos} vendas={vendas} />}
-            {selected === 'produtos' && <ProdutosView produtos={produtos} salvarProdutos={salvarProdutos} user={user} />}
+            {selected === 'produtos' && <ProdutosView produtos={produtos} user={user} />}
             {selected === 'relatorios' && <RelatoriosView vendas={vendas} />}
-            {selected === 'avancado' && user.role === 'admin' && <RelatorioAvancado vendas={vendas} produtos={produtos} limparDadosPorData={limparDadosPorData} users={users} />}
+            {selected === 'avancado' && user.role === 'admin' && <RelatorioAvancado vendas={vendas} produtos={produtos} users={users} />}
             
             {/* TELA DE AVARIAS */}
             {selected === 'avarias' && (
